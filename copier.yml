@@ -1,0 +1,98 @@
+_subdirectory: template
+_templates_suffix: ""
+_envops:
+  trim_blocks: true
+  lstrip_blocks: true
+  keep_trailing_newline: true
+
+_exclude:
+  - "copier.yml"
+  - ".git"
+  - ".DS_Store"
+  - "{% if not use_redis %}internal/cache{% endif %}"
+  - "{% if not use_redis %}internal/locking{% endif %}"
+  - "{% if not use_redis %}internal/service/user_cache.go{% endif %}"
+  - "{% if not use_kafka %}internal/messaging{% endif %}"
+  - "{% if not use_kafka %}internal/service/user_events.go{% endif %}"
+  - "{% if not use_s3 %}internal/storage{% endif %}"
+  - "{% if not use_docker %}Dockerfile{% endif %}"
+  - "{% if not use_docker %}docker-compose.yml{% endif %}"
+  - "{% if not use_docker %}.dockerignore{% endif %}"
+  - "{% if not use_github_actions %}.github{% endif %}"
+
+_tasks:
+  - command: "gofmt -w ."
+    working_directory: "{{ _copier_conf.dst_path }}"
+
+_message_after_copy: |
+  Your service {{ project_name }} is ready in {{ _copier_conf.dst_path }}.
+
+  Next steps:
+    cd {{ _copier_conf.dst_path }}
+    go mod tidy
+  {% if use_docker %}
+    make dev            # start Postgres{% if use_redis %} + Redis{% endif %}{% if use_kafka %} + Kafka{% endif %}{% if use_s3 %} + MinIO{% endif %} via docker compose
+  {% endif %}
+    make migrate-up     # apply database migrations
+    make run            # start the API on :8080
+
+  See README.md for the full layer-by-layer architecture guide.
+
+project_name:
+  type: str
+  help: Human-readable project/service name
+  default: "My Service"
+
+project_slug:
+  type: str
+  help: Short slug used for the binary name, Docker image, and compose project name
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+
+module_name:
+  type: str
+  help: Go module path (e.g. github.com/acme/order-service)
+  default: "github.com/acme/{{ project_slug }}"
+
+go_version:
+  type: str
+  help: Go version to target
+  default: "1.23"
+  choices:
+    - "1.23"
+    - "1.22"
+    - "1.21"
+
+http_port:
+  type: str
+  help: Port the HTTP server listens on
+  default: "8080"
+
+use_redis:
+  type: bool
+  help: Include the cache/ and locking/ packages, backed by Redis?
+  default: true
+
+use_kafka:
+  type: bool
+  help: Include the messaging/ package (Kafka producer/consumer)?
+  default: true
+
+use_s3:
+  type: bool
+  help: Include the storage/ package (S3-compatible object storage, MinIO for local dev)?
+  default: true
+
+use_docker:
+  type: bool
+  help: Include Dockerfile and docker-compose.yml for local development?
+  default: true
+
+use_github_actions:
+  type: bool
+  help: Include a GitHub Actions CI workflow (lint, vet, test, build)?
+  default: true
+
+author_name:
+  type: str
+  help: Author name (used in README, optional)
+  default: ""
